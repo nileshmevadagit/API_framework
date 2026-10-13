@@ -23,6 +23,12 @@ All notable changes are recorded here. The format follows
   all three stores, with Redis under the `integration` marker.
 - `state:` config section (`memory`, `sqlite` or `redis`; the Redis URL must be `${ENV_VAR}`)
   and `build_state_store()`.
+- Observability: an access log (one record per call, URL template only, outermost in the chain),
+  `Hooks` for request, response, retry and rate-limit events, `JsonFormatter` for applications to
+  attach, and an optional OpenTelemetry span (`telemetry=True`, `otel` extra). Headers are redacted
+  before any log; bodies are logged only at DEBUG with `log_bodies=True`.
+- `url_template` argument on `request()` and `build_request()`, so logs and spans show `/users/{id}`
+  rather than the ID.
 - Auth: api key (header or query), bearer, basic, OAuth2 client credentials (cached, refreshed
   before expiry, single-flight, one retry after a 401) and custom signing callables.
 - Retries: response classifier (ok, retryable, failure), exponential backoff with full jitter,

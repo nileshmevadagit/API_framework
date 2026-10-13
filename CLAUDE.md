@@ -40,8 +40,10 @@ src/apiframework/
   errors.py        # ApiError hierarchy
   clock.py         # Clock protocol + SystemClock (now / monotonic / sleep)
   cli.py           # `apiframework run job.yaml`
-  middleware/      # base.py: Middleware protocol; chain.py: compose; retry (+ classify, backoff),
-                   # auth, ratelimit; logging comes in milestone 4
+  middleware/      # base.py: Middleware protocol; chain.py: compose; access_log.py, telemetry.py
+                   # (outermost); retry (+ classify, backoff), auth, ratelimit
+  hooks.py         # Hooks: metrics callbacks (request, response, retry, rate limited)
+  logging_json.py  # JsonFormatter, attached by the application (library never configures logging)
   auth/            # base.py: AuthHandler; simple.py: api key, bearer, basic; oauth2; custom
   pagination/      # base.py: protocol + iter_pages/iter_items; strategies.py: offset, page,
                    # cursor, link header, next URL
@@ -156,14 +158,15 @@ Scaffold done (packaging, CI, tooling). Milestone 1 done (merged to `main`): `Re
 contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient` and `Client`,
 httpx transport with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done
 (merged to `main`): auth, retries with the response classifier and Retry-After, pagination
-strategies and iterators, and in-memory rate limits. Milestone 6 done (on branch
-`feat/state-sqlite-redis`, not committed): SQLite and Redis state stores, with the contract suite
-run against all three backends (Redis under `integration`), and a `state:` config section.
+strategies and iterators, and in-memory rate limits. Milestone 6 done (merged to `main`): SQLite
+and Redis state stores and the `state:` config section. Milestone 7 done (on branch
+`feat/hooks-logging-otel`, not committed): access log (outermost, template-only URLs, redacted
+headers, bodies only at DEBUG when enabled), hooks for request, response, retry and rate-limit
+events, a JSON log formatter for the application to attach, and an optional OpenTelemetry span.
 
-Still open for v1: logging middleware and hooks (milestone 7), per-endpoint limiter keys and YAML
-pagination (both wait for `endpoints.py`), and `codecs/` (not yet scheduled). Next, in order:
-7. Hooks/logging/OTel
-8. CLI/Docker/dlt adapter
-9. Docs and examples
+Still open for v1: CLI, Docker and dlt adapter (milestone 8), docs and examples (milestone 9),
+per-endpoint limiter keys and YAML pagination (both wait for `endpoints.py`), and `codecs/` (not
+yet scheduled). Observability options are constructor arguments only; wiring them to YAML belongs
+with the CLI in milestone 8.
 
 Update this section as milestones land.

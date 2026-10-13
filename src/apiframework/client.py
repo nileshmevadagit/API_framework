@@ -17,10 +17,12 @@ from typing import TYPE_CHECKING, TypeVar
 
 from apiframework.auth import build_auth
 from apiframework.clock import SystemClock
+from apiframework.middleware.access_log import AccessLogMiddleware
 from apiframework.middleware.auth import AuthMiddleware
 from apiframework.middleware.chain import build_chain
 from apiframework.middleware.ratelimit import RateLimitMiddleware
 from apiframework.middleware.retry import RetryMiddleware
+from apiframework.middleware.telemetry import TelemetryMiddleware, get_tracer
 from apiframework.pagination import iter_items, iter_pages
 from apiframework.ratelimit import RateLimiters
 from apiframework.request import RequestSpec
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
     from apiframework.auth.base import AuthHandler
     from apiframework.clock import Clock
     from apiframework.config import ResolvedApi
+    from apiframework.hooks import Hooks
     from apiframework.middleware.base import Middleware
     from apiframework.middleware.classify import Classifier
     from apiframework.pagination.base import PaginationStrategy
@@ -69,12 +72,17 @@ class AsyncClient:
         rate_limiters: RateLimiters | None = None,
         clock: Clock | None = None,
         rng: random.Random | None = None,
+        hooks: Hooks | None = None,
+        log_bodies: bool = False,
+        telemetry: bool = False,
     ) -> None:
         """Build the client for ``api``.
 
         ``auth`` overrides the auth in the config (for custom handlers). ``state`` and
         ``rate_limiters`` default to private ones; pass shared instances to share quota.
-        ``clock`` and ``rng`` are for tests.
+        ``clock`` and ``rng`` are for tests. ``hooks`` receive metrics events.
+        ``log_bodies`` adds request and response bodies to DEBUG logs. ``telemetry`` starts an
+        OpenTelemetry span per call (needs the ``otel`` extra).
         """
         self.name = api.name
         self._base_url = api.base_url.rstrip("/")
@@ -87,15 +95,25 @@ class AsyncClient:
         limiters = (
             rate_limiters if rate_limiters is not None else RateLimiters(state=state, clock=clock)
         )
-        layers: list[Middleware] = [
-            *middleware,
-            RetryMiddleware(api.retry, clock=clock, rng=rng, classifier=classifier),
-        ]
+        layers: list[Middleware] = [*middleware]
+        if telemetry:
+            layers.append(TelemetryMiddleware(api=api.name, tracer=get_tracer()))
+        layers.append(AccessLogMiddleware(api=api.name, hooks=hooks, log_bodies=log_bodies))
+        layers.append(
+            RetryMiddleware(
+                api.retry,
+                clock=clock,
+                rng=rng,
+                classifier=classifier,
+                api=api.name,
+                hooks=hooks,
+            )
+        )
         if handler is not None:
             layers.append(AuthMiddleware(handler))
         limits = limiters.for_key(api.name, api.rate_limits)
         if limits:
-            layers.append(RateLimitMiddleware(limits))
+            layers.append(RateLimitMiddleware(limits, clock=clock, api=api.name, hooks=hooks))
         self._chain = build_chain(layers, self._transport.send)
 
     async def send(self, spec: RequestSpec) -> httpx.Response:
@@ -112,6 +130,7 @@ class AsyncClient:
         json: JsonValue = None,
         content: bytes | None = None,
         cost: int = 1,
+        url_template: str | None = None,
     ) -> RequestSpec:
         """Build a request for ``path`` (relative to the API's base URL) without sending it.
 
@@ -122,7 +141,7 @@ class AsyncClient:
         return RequestSpec(
             method=method,
             url=self._url(path),
-            url_template=path,
+            url_template=url_template or path,
             params=tuple((key, _param_text(value)) for key, value in (params or {}).items()),
             headers=tuple((key, value) for key, value in (headers or {}).items()),
             json_body=json,
@@ -140,6 +159,7 @@ class AsyncClient:
         json: JsonValue = None,
         content: bytes | None = None,
         cost: int = 1,
+        url_template: str | None = None,
     ) -> httpx.Response:
         """Build a request for ``path`` and send it through the chain."""
         spec = self.build_request(
@@ -150,6 +170,7 @@ class AsyncClient:
             json=json,
             content=content,
             cost=cost,
+            url_template=url_template,
         )
         return await self.send(spec)
 
@@ -274,6 +295,9 @@ class Client:
         rate_limiters: RateLimiters | None = None,
         clock: Clock | None = None,
         rng: random.Random | None = None,
+        hooks: Hooks | None = None,
+        log_bodies: bool = False,
+        telemetry: bool = False,
     ) -> None:
         self._loop = asyncio.new_event_loop()
         self._inner = AsyncClient(
@@ -285,6 +309,9 @@ class Client:
             rate_limiters=rate_limiters,
             clock=clock,
             rng=rng,
+            hooks=hooks,
+            log_bodies=log_bodies,
+            telemetry=telemetry,
         )
 
     @property
