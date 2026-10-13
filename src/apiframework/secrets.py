@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from apiframework.errors import ConfigError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
 REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
@@ -79,3 +79,11 @@ def _looks_like_key(token: str) -> bool:
         and any(c.isdigit() for c in token)
         and any(c.isalpha() for c in token)
     )
+
+
+REDACTED = "[redacted]"
+
+
+def redact_headers(headers: Iterable[tuple[str, str]]) -> dict[str, str]:
+    """Headers as a dict, with credential-like values replaced. Safe to log."""
+    return {name: REDACTED if SENSITIVE_NAME.search(name) else value for name, value in headers}

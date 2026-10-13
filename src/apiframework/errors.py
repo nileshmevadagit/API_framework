@@ -17,9 +17,10 @@ class ApiError(Exception):
 class HTTPStatusError(ApiError):
     """The server answered with a status we do not accept. Carries the response."""
 
-    def __init__(self, response: httpx.Response) -> None:
+    def __init__(self, response: httpx.Response, *, attempts: int = 1) -> None:
         self.response = response
         self.status_code = response.status_code
+        self.attempts = attempts
         super().__init__(f"HTTP {response.status_code}")
 
 
@@ -55,9 +56,10 @@ class ResponseRejected(ApiError):
     Used for APIs that return 200 with an error in the body (GraphQL, JSON-RPC).
     """
 
-    def __init__(self, response: httpx.Response, reason: str) -> None:
+    def __init__(self, response: httpx.Response, reason: str, *, attempts: int = 1) -> None:
         self.response = response
         self.reason = reason
+        self.attempts = attempts
         super().__init__(f"response rejected: {reason}")
 
 
