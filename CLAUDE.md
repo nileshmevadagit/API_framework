@@ -154,7 +154,7 @@ Scaffold done (packaging, CI, tooling). Milestone 1 done (merged to `main`): `Re
 `Middleware` protocol, `Clock`, `errors.py`, in-memory `StateStore`, and the shared StateStore
 contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient` and `Client`, httpx transport
 with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done (on branch
-`feat/auth-retry-pagination-ratelimit`, not committed): auth (api key, bearer, basic, OAuth2
+`feat/auth-retry-pagination-ratelimit`, committed; not yet merged): auth (api key, bearer, basic, OAuth2
 with single-flight refresh, custom), retries with the response classifier and Retry-After,
 pagination (five strategies and iterators), and in-memory rate limits (token bucket and quota
 windows over the StateStore). Still open from milestone 3: logging hooks (milestone 4), per-
