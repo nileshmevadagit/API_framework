@@ -1,6 +1,51 @@
-.env
-.venv/
+# --- Python
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# --- Environments (uv creates .venv in the repo root)
+.venv/
+venv/
+
+# --- Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Local state written by the library during dev runs
+*.sqlite
+*.sqlite3
+*.db
+.checkpoints/
+
+# --- Secrets: never commit. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# --- Claude Code (CLAUDE.md itself is committed)
+.claude/
+CLAUDE.local.md
+.mcp.json
+
+# --- VS Code: share settings/extensions/launch, ignore the rest
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# --- Local data pulled during experiments (from the original .gitignore)
 data/raw/
+
+# --- Office lock files (Word creates ~$… while a .docx is open)
+~$*
+
+# --- macOS
+.DS_Store
