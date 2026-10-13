@@ -18,6 +18,11 @@ All notable changes are recorded here. The format follows
 - httpx transport with always-on timeouts, forward proxy with `no_proxy`, SOCKS (optional
   `socks` extra), CA bundles and client certificates.
 - Dev dependency: `types-PyYAML`, for mypy strict on the YAML loader.
+- State stores: `SQLiteStateStore` (stdlib, WAL, safe across processes) and `RedisStateStore`
+  (optional `redis` extra; counters updated by one Lua script). The contract suite runs against
+  all three stores, with Redis under the `integration` marker.
+- `state:` config section (`memory`, `sqlite` or `redis`; the Redis URL must be `${ENV_VAR}`)
+  and `build_state_store()`.
 - Auth: api key (header or query), bearer, basic, OAuth2 client credentials (cached, refreshed
   before expiry, single-flight, one retry after a 401) and custom signing callables.
 - Retries: response classifier (ok, retryable, failure), exponential backoff with full jitter,

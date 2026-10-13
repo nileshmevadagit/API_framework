@@ -114,3 +114,27 @@ def test_rate_limits_parse_and_default_to_raise() -> None:
 def test_unknown_rate_window_is_rejected() -> None:
     with pytest.raises(ConfigError):
         parse_config(_api(rate_limits=[{"window": "minute", "limit": 5}]), env=ENV)
+
+
+def test_state_defaults_to_memory() -> None:
+    from apiframework.config import MemoryState
+
+    assert isinstance(parse_config({}, env=ENV).state, MemoryState)
+
+
+def test_sqlite_state_takes_a_path() -> None:
+    from apiframework.config import SQLiteState
+
+    cfg = parse_config({"state": {"type": "sqlite", "path": "/var/lib/job/state.db"}}, env=ENV)
+    assert isinstance(cfg.state, SQLiteState)
+    assert cfg.state.path == "/var/lib/job/state.db"
+
+
+def test_redis_url_must_be_a_reference_and_is_hidden() -> None:
+    cfg = parse_config(
+        {"state": {"type": "redis", "url": "${REDIS_URL}"}},
+        env={"REDIS_URL": "redis://:pw@h:6379/0"},
+    )
+    assert "pw@h" not in repr(cfg)
+    with pytest.raises(ConfigError, match="url: must reference"):
+        parse_config({"state": {"type": "redis", "url": "redis://:pw@h:6379/0"}}, env=ENV)

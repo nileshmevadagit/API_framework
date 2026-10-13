@@ -46,7 +46,8 @@ src/apiframework/
   pagination/      # base.py: protocol + iter_pages/iter_items; strategies.py: offset, page,
                    # cursor, link header, next URL
   codecs/          # json, form, xml, raw
-  state/           # base.py: StateStore protocol; memory.py (sqlite, redis to come)
+  state/           # base.py: StateStore protocol; memory.py, sqlite.py, redis.py (Lua incr);
+                   # build_state_store() turns the config `state:` section into a store
   adapters/dlt.py  # optional extra [dlt]
 tests/fakes.py     # FakeClock (imported as `from fakes import ...`)
 tests/unit/        # mirrors src paths; respx-mocked
@@ -152,13 +153,17 @@ drifts into these, stop and ask.
 
 Scaffold done (packaging, CI, tooling). Milestone 1 done (merged to `main`): `RequestSpec`,
 `Middleware` protocol, `Clock`, `errors.py`, in-memory `StateStore`, and the shared StateStore
-contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient` and `Client`, httpx transport
-with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done (on branch
-`feat/auth-retry-pagination-ratelimit`, committed; not yet merged): auth (api key, bearer, basic, OAuth2
-with single-flight refresh, custom), retries with the response classifier and Retry-After,
-pagination (five strategies and iterators), and in-memory rate limits (token bucket and quota
-windows over the StateStore). Still open from milestone 3: logging hooks (milestone 4), per-
-endpoint limiter keys and YAML pagination (both wait for endpoints.py). Next, in order:
-4. SQLite/Redis stores → hooks/logging/OTel → CLI/Docker/dlt adapter → docs
+contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient` and `Client`,
+httpx transport with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done
+(merged to `main`): auth, retries with the response classifier and Retry-After, pagination
+strategies and iterators, and in-memory rate limits. Milestone 6 done (on branch
+`feat/state-sqlite-redis`, not committed): SQLite and Redis state stores, with the contract suite
+run against all three backends (Redis under `integration`), and a `state:` config section.
+
+Still open for v1: logging middleware and hooks (milestone 7), per-endpoint limiter keys and YAML
+pagination (both wait for `endpoints.py`), and `codecs/` (not yet scheduled). Next, in order:
+7. Hooks/logging/OTel
+8. CLI/Docker/dlt adapter
+9. Docs and examples
 
 Update this section as milestones land.

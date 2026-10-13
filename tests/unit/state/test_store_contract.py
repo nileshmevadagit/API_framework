@@ -1,34 +1,67 @@
-"""Contract suite every StateStore must pass. SQLite and Redis join FACTORIES later."""
+"""Contract suite every StateStore must pass.
+
+Memory and SQLite run as unit tests. Redis needs the docker-compose service, so it is marked
+``integration`` and runs with ``pytest -m integration``. Each Redis test uses its own key prefix,
+which is removed afterwards.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+import uuid
 from typing import TYPE_CHECKING
 
 import pytest
 
-from apiframework.clock import Clock
-from apiframework.state import MemoryStateStore, StateStore
+from apiframework.state import MemoryStateStore, RedisStateStore, SQLiteStateStore, StateStore
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+    from pathlib import Path
+
     from fakes import FakeClock
 
-StoreFactory = Callable[[Clock], StateStore]
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-FACTORIES: list[StoreFactory] = [
-    lambda clock: MemoryStateStore(clock),
+BACKENDS = [
+    pytest.param("memory", id="memory"),
+    pytest.param("sqlite", id="sqlite"),
+    pytest.param("redis", id="redis", marks=pytest.mark.integration),
 ]
 
 
-@pytest.fixture(params=FACTORIES, ids=["memory"])
-def make_store(request: pytest.FixtureRequest) -> StoreFactory:
-    factory: StoreFactory = request.param
-    return factory
+@pytest.fixture(params=BACKENDS)
+async def store(
+    request: pytest.FixtureRequest, tmp_path: Path, clock: FakeClock
+) -> AsyncIterator[StateStore]:
+    backend: str = request.param
+    if backend == "memory":
+        memory = MemoryStateStore(clock)
+        yield memory
+        return
+
+    if backend == "sqlite":
+        sqlite = SQLiteStateStore(tmp_path / "state.db", clock=clock)
+        yield sqlite
+        await sqlite.aclose()
+        return
+
+    prefix = f"contract-{uuid.uuid4().hex}:"
+    redis_store = RedisStateStore(REDIS_URL, clock=clock, prefix=prefix)
+    yield redis_store
+    await _drop_prefix(prefix)
+    await redis_store.aclose()
 
 
-@pytest.fixture
-def store(make_store: StoreFactory, clock: FakeClock) -> StateStore:
-    return make_store(clock)
+async def _drop_prefix(prefix: str) -> None:
+    import redis.asyncio as redis_asyncio
+
+    client = redis_asyncio.Redis.from_url(REDIS_URL)
+    try:
+        async for key in client.scan_iter(match=f"{prefix}*"):
+            await client.delete(key)
+    finally:
+        await client.aclose()
 
 
 async def test_missing_key_reads_as_none(store: StateStore) -> None:
