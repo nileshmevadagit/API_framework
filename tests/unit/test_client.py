@@ -10,6 +10,7 @@ import pytest
 
 from apiframework.client import AsyncClient, Client
 from apiframework.config import parse_config
+from apiframework.errors import HTTPStatusError, RetryExhausted
 
 if TYPE_CHECKING:
     import respx
@@ -96,13 +97,37 @@ async def test_json_and_content_together_are_rejected() -> None:
             await client.request("POST", "/r", json={}, content=b"x")
 
 
-async def test_responses_are_returned_unclassified(respx_mock: respx.MockRouter) -> None:
-    # Status classification arrives with the retry middleware (milestone 3).
-    respx_mock.get(f"{BASE}/boom").mock(return_value=httpx.Response(500, text="nope"))
+async def test_success_responses_are_returned_as_received(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get(f"{BASE}/ok").mock(return_value=httpx.Response(201, text="made"))
     async with AsyncClient(_api()) as client:
-        response = await client.get("/boom")
-    assert response.status_code == 500
-    assert response.text == "nope"
+        response = await client.get("/ok")
+    assert response.status_code == 201
+    assert response.text == "made"
+
+
+async def test_retryable_error_is_raised_after_retries(
+    respx_mock: respx.MockRouter, clock: Any
+) -> None:
+    route = respx_mock.get(f"{BASE}/boom").mock(return_value=httpx.Response(500, text="nope"))
+    api = parse_config(
+        {"defaults": {"retry": {"max_attempts": 2}}, "apis": {"demo": {"base_url": BASE}}},
+        env={},
+    ).api("demo")
+    async with AsyncClient(api, clock=clock) as client:
+        with pytest.raises(RetryExhausted) as info:
+            await client.get("/boom")
+    assert info.value.attempts == 2
+    assert route.call_count == 2
+
+
+async def test_client_error_is_raised_without_retry(
+    respx_mock: respx.MockRouter, clock: Any
+) -> None:
+    route = respx_mock.get(f"{BASE}/missing").mock(return_value=httpx.Response(404))
+    async with AsyncClient(_api(), clock=clock) as client:
+        with pytest.raises(HTTPStatusError):
+            await client.get("/missing")
+    assert route.call_count == 1
 
 
 async def test_middleware_wraps_requests_in_order(respx_mock: respx.MockRouter) -> None:

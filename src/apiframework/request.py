@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, JsonValue, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 HTTPMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
 Pairs = tuple[tuple[str, str], ...]
@@ -36,6 +36,7 @@ class RequestSpec(BaseModel):
     headers: Pairs = ()
     content: bytes | None = None
     json_body: JsonValue = None
+    cost: int = Field(default=1, ge=1)
 
     @model_validator(mode="before")
     @classmethod

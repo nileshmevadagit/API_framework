@@ -18,6 +18,17 @@ All notable changes are recorded here. The format follows
 - httpx transport with always-on timeouts, forward proxy with `no_proxy`, SOCKS (optional
   `socks` extra), CA bundles and client certificates.
 - Dev dependency: `types-PyYAML`, for mypy strict on the YAML loader.
+- Auth: api key (header or query), bearer, basic, OAuth2 client credentials (cached, refreshed
+  before expiry, single-flight, one retry after a 401) and custom signing callables.
+- Retries: response classifier (ok, retryable, failure), exponential backoff with full jitter,
+  `Retry-After` in both forms, and idempotency rules (POST and PATCH only with opt-in or an
+  `Idempotency-Key`). Non-retryable responses raise `HTTPStatusError`.
+- Pagination: offset, page, cursor, Link header and next-URL strategies, with `iter_pages` and
+  `iter_items` on the client. Loops are detected and raise `PaginationError`.
+- Rate limits: per-second token bucket, and hour and day quota windows in the StateStore.
+  Server `RateLimit-*` headers correct the local counter. Limiters are shared by key through
+  `RateLimiters`. Requests can declare a cost above 1.
+- Errors: `ResponseRejected` (classifier rejected a 2xx) and `PaginationError`.
 - Project scaffold: packaging (uv + hatchling), ruff, mypy --strict, pytest,
   pre-commit, GitHub Actions (CI + nightly integration), docker-compose services,
   VS Code workspace settings, CLAUDE.md.
