@@ -58,7 +58,10 @@ def _checked_headers(value: dict[str, str], info: ValidationInfo) -> dict[str, s
         where = f"headers.{name}"
         reject_literal_name_value(name, raw, where=where)
         reject_literal_secret(raw, where=where)
-        checked[name] = expand_refs(raw, env, where=where)
+        resolved = expand_refs(raw, env, where=where)
+        if REF_PATTERN.search(raw) and not resolved.strip():
+            raise ConfigError(f"{where}: the environment variable is empty")
+        checked[name] = resolved
     return checked
 
 
@@ -66,7 +69,10 @@ def _secret(value: object, info: ValidationInfo) -> SecretStr:
     """Secret fields must be ``${ENV_VAR}`` references. Anything else is refused."""
     if not isinstance(value, str) or not REF_PATTERN.search(value):
         raise ConfigError(f"{info.field_name}: must reference an environment variable")
-    return SecretStr(expand_refs(value, _env(info), where=str(info.field_name)))
+    resolved = expand_refs(value, _env(info), where=str(info.field_name))
+    if not resolved.strip():
+        raise ConfigError(f"{info.field_name}: the environment variable is empty")
+    return SecretStr(resolved)
 
 
 Secret = Annotated[SecretStr, BeforeValidator(_secret)]

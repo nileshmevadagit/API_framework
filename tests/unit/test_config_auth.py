@@ -138,3 +138,14 @@ def test_redis_url_must_be_a_reference_and_is_hidden() -> None:
     assert "pw@h" not in repr(cfg)
     with pytest.raises(ConfigError, match="url: must reference"):
         parse_config({"state": {"type": "redis", "url": "redis://:pw@h:6379/0"}}, env=ENV)
+
+
+def test_empty_secret_from_environment_is_rejected() -> None:
+    # Regression: an empty TOKEN used to produce "Bearer " and fail later inside httpx.
+    with pytest.raises(ConfigError, match="is empty"):
+        parse_config(_api(auth={"type": "bearer", "token": "${TOKEN}"}), env={"TOKEN": ""})
+
+
+def test_empty_header_from_environment_is_rejected() -> None:
+    with pytest.raises(ConfigError, match="is empty"):
+        parse_config(_api(headers={"X-Api-Key": "${KEY}"}), env={"KEY": "  "})

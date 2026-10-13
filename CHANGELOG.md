@@ -36,6 +36,15 @@ All notable changes are recorded here. The format follows
 - dlt adapter (`apiframework.adapters.dlt.records_resource`, `dlt` extra).
 - Dockerfile for the CLI: python:3.12-slim, non-root user, runtime extras only.
 - `Client.iter_items` and `Client.build_request` for the sync client.
+- README rewritten as a user guide (install, quick start, CLI, configuration reference, errors,
+  observability, limitations). Developer setup kept under "Development".
+- Examples: GitHub repos, PokeAPI pagination, JSONPlaceholder CRUD, hooks and JSON logs.
+- Design doc layout updated to the modules that exist.
+
+### Fixed
+- An empty environment variable used as a secret (for example `TOKEN=""`) produced an invalid
+  `Bearer ` header and failed inside httpx. It is now a `ConfigError` at load time, which names
+  the variable.
 - `url_template` argument on `request()` and `build_request()`, so logs and spans show `/users/{id}`
   rather than the ID.
 - Auth: api key (header or query), bearer, basic, OAuth2 client credentials (cached, refreshed

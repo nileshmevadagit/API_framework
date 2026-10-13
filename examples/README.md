@@ -1,11 +1,11 @@
 # Examples
 
-Runnable examples land here as features are built, one per public API used in
-the integration tests:
+Each Python example runs with `uv run python examples/<name>.py` and needs internet access.
+Nothing needs a secret: `github_repos.py` uses `GITHUB_TOKEN` only when it's set.
 
-- `github_repos.py` — Link-header pagination and real rate-limit headers
-- `pokeapi_offset.py` — offset pagination with a next URL in the body
-- `jsonplaceholder_crud.py` — every HTTP verb through one client
-- `job.yaml` — a complete YAML job for `apiframework run`
-
-Each example must run with `uv run python examples/<name>.py` and nothing else.
+- `jsonplaceholder_crud.py` — every HTTP verb through one client, and why created records can't be read back
+- `github_repos.py` — Link-header pagination and rate-limit headers
+- `pokeapi_offset.py` — pagination with a next URL in the body
+- `hooks_and_json_logs.py` — metrics hooks and JSON log lines
+- `jsonplaceholder-job.yaml` — a complete job file for `apiframework run`
+  (`uv run apiframework run examples/jsonplaceholder-job.yaml`)
