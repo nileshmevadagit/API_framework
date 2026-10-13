@@ -1,25 +1,28 @@
 """Configuration models. YAML and plain Python both load into these.
 
 Settings can be set once in ``defaults`` and overridden per API. An API's ``timeout``,
-``proxy`` or ``tls`` section replaces the default section as a whole; it is not merged
-field by field.
+``proxy``, ``tls`` or ``retry`` section replaces the default section as a whole; it is
+not merged field by field.
 
 Secrets are written as ``${ENV_VAR}``. The environment comes from the validation
-context (``parse_config(data, env=...)``), defaulting to ``os.environ``. Validators
-raise ``ConfigError`` directly so it reaches the caller unwrapped.
+context (``parse_config(data, env=...)``), defaulting to ``os.environ``. Secret fields
+hold ``SecretStr`` so they never appear in reprs or logs. Validators raise
+``ConfigError`` directly so it reaches the caller unwrapped.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
+    SecretStr,
     ValidationError,
     ValidationInfo,
     field_validator,
@@ -27,16 +30,16 @@ from pydantic import (
 )
 
 from apiframework.errors import ConfigError
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
 from apiframework.secrets import (
+    REF_PATTERN,
     expand_refs,
     reject_literal_name_value,
     reject_literal_secret,
     reject_literal_userinfo,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _env(info: ValidationInfo) -> Mapping[str, str]:
@@ -45,6 +48,16 @@ def _env(info: ValidationInfo) -> Mapping[str, str]:
         env: Mapping[str, str] = context["env"]
         return env
     return os.environ
+
+
+def _secret(value: object, info: ValidationInfo) -> SecretStr:
+    """Secret fields must be ``${ENV_VAR}`` references. Anything else is refused."""
+    if not isinstance(value, str) or not REF_PATTERN.search(value):
+        raise ConfigError(f"{info.field_name}: must reference an environment variable")
+    return SecretStr(expand_refs(value, _env(info), where=str(info.field_name)))
+
+
+Secret = Annotated[SecretStr, BeforeValidator(_secret)]
 
 
 class _Model(BaseModel):
@@ -96,18 +109,88 @@ class TLSConfig(_Model):
         return self
 
 
+class RetryConfig(_Model):
+    """Attempts and backoff. ``Retry-After`` from the server always overrides backoff."""
+
+    max_attempts: int = Field(default=4, ge=1)
+    backoff_base: float = Field(default=0.5, gt=0)
+    max_backoff: float = Field(default=30.0, gt=0)
+    retry_non_idempotent: bool = False
+
+
+class RateLimitConfig(_Model):
+    """One quota. ``second`` is a token bucket that waits; ``hour`` and ``day`` are
+    fixed windows aligned to the epoch that either raise or wait, per ``on_exhausted``.
+    """
+
+    window: Literal["second", "hour", "day"]
+    limit: int = Field(gt=0)
+    on_exhausted: Literal["sleep", "raise"] = "raise"
+
+
+class NoAuth(_Model):
+    type: Literal["none"] = "none"
+
+
+class BearerAuth(_Model):
+    type: Literal["bearer"]
+    token: Secret
+
+
+class ApiKeyAuth(_Model):
+    type: Literal["api_key"]
+    name: str = Field(min_length=1)
+    value: Secret
+    location: Literal["header", "query"] = "header"
+
+
+class BasicAuth(_Model):
+    type: Literal["basic"]
+    username: Secret
+    password: Secret
+
+
+class OAuth2Auth(_Model):
+    """OAuth2 client credentials. Tokens are cached and refreshed before they expire."""
+
+    type: Literal["oauth2"]
+    token_url: str
+    client_id: Secret
+    client_secret: Secret
+    scope: str | None = None
+    refresh_margin: float = Field(default=60.0, ge=0)
+
+    @field_validator("token_url")
+    @classmethod
+    def _check_token_url(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ConfigError(f"token_url must be an absolute http(s) URL, got {value!r}")
+        return value
+
+
+AuthConfig = Annotated[
+    NoAuth | BearerAuth | ApiKeyAuth | BasicAuth | OAuth2Auth,
+    Field(discriminator="type"),
+]
+
+
 class Defaults(_Model):
     timeout: Timeouts = Field(default_factory=Timeouts)
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     tls: TLSConfig = Field(default_factory=TLSConfig)
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 
 
 class ApiConfig(_Model):
     base_url: str
     headers: dict[str, str] = Field(default_factory=dict)
+    auth: AuthConfig | None = None
+    rate_limits: tuple[RateLimitConfig, ...] = ()
     timeout: Timeouts | None = None
     proxy: ProxyConfig | None = None
     tls: TLSConfig | None = None
+    retry: RetryConfig | None = None
 
     @field_validator("base_url")
     @classmethod
@@ -144,9 +227,12 @@ class Config(_Model):
             name=name,
             base_url=raw.base_url,
             headers=raw.headers,
+            auth=raw.auth,
+            rate_limits=raw.rate_limits,
             timeout=raw.timeout or self.defaults.timeout,
             proxy=raw.proxy or self.defaults.proxy,
             tls=raw.tls or self.defaults.tls,
+            retry=raw.retry or self.defaults.retry,
         )
 
 
@@ -156,9 +242,12 @@ class ResolvedApi(_Model):
     name: str
     base_url: str
     headers: dict[str, str]
+    auth: AuthConfig | None
+    rate_limits: tuple[RateLimitConfig, ...]
     timeout: Timeouts
     proxy: ProxyConfig
     tls: TLSConfig
+    retry: RetryConfig
 
 
 def parse_config(data: Mapping[str, Any], *, env: Mapping[str, str] | None = None) -> Config:
@@ -179,7 +268,6 @@ def load_config(path: str | Path, *, env: Mapping[str, str] | None = None) -> Co
         import yaml
     except ImportError as exc:
         raise ImportError("YAML config needs PyYAML: pip install apiframework[yaml]") from exc
-
     text = Path(path).read_text(encoding="utf-8")
     data = yaml.safe_load(text)
     if not isinstance(data, dict):

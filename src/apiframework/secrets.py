@@ -16,7 +16,7 @@ from apiframework.errors import ConfigError
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 # Prefixes used by common providers. Matched case-sensitively.
 _KNOWN_KEY_PREFIXES = ("ghp_", "gho_", "github_pat_", "sk_live_", "sk_test_", "sk-", "AKIA", "xox")
@@ -38,12 +38,12 @@ def expand_refs(value: str, env: Mapping[str, str], *, where: str) -> str:
             raise ConfigError(f"{where}: environment variable {name} is not set")
         return env[name]
 
-    return _REF.sub(_sub, value)
+    return REF_PATTERN.sub(_sub, value)
 
 
 def strip_refs(value: str) -> str:
     """Remove references so the remaining text can be checked for literal secrets."""
-    return _REF.sub("", value)
+    return REF_PATTERN.sub("", value)
 
 
 def reject_literal_secret(value: str, *, where: str) -> None:
@@ -58,7 +58,7 @@ def reject_literal_secret(value: str, *, where: str) -> None:
 
 def reject_literal_name_value(name: str, value: str, *, where: str) -> None:
     """Reject a credential-named field (e.g. ``X-Api-Key``) that holds a literal value."""
-    if SENSITIVE_NAME.search(name) and value and not _REF.search(value):
+    if SENSITIVE_NAME.search(name) and value and not REF_PATTERN.search(value):
         raise ConfigError(f"{where}: {name!r} must reference an environment variable")
 
 

@@ -34,14 +34,17 @@ src/apiframework/
   config.py        # Pydantic models; YAML + Python both load into these
   secrets.py       # `${ENV_VAR}` refs; rejects pasted keys in config
   transport.py     # httpx transport: timeouts, proxy, TLS (bottom of the chain)
+  ratelimit.py     # token bucket (per second), epoch-aligned quota windows, RateLimiters registry
   endpoints.py     # endpoint definitions -> RequestSpec
   request.py       # RequestSpec (frozen; .clone(**overrides))
   errors.py        # ApiError hierarchy
   clock.py         # Clock protocol + SystemClock (now / monotonic / sleep)
   cli.py           # `apiframework run job.yaml`
-  middleware/      # base.py: Middleware protocol; chain.py: compose; logging, retry, auth, ratelimit
-  auth/            # api_key, bearer, basic, oauth2, custom
-  pagination/      # offset, page, cursor, link_header, next_url
+  middleware/      # base.py: Middleware protocol; chain.py: compose; retry (+ classify, backoff),
+                   # auth, ratelimit; logging comes in milestone 4
+  auth/            # base.py: AuthHandler; simple.py: api key, bearer, basic; oauth2; custom
+  pagination/      # base.py: protocol + iter_pages/iter_items; strategies.py: offset, page,
+                   # cursor, link header, next URL
   codecs/          # json, form, xml, raw
   state/           # base.py: StateStore protocol; memory.py (sqlite, redis to come)
   adapters/dlt.py  # optional extra [dlt]
@@ -149,10 +152,13 @@ drifts into these, stop and ask.
 
 Scaffold done (packaging, CI, tooling). Milestone 1 done (merged to `main`): `RequestSpec`,
 `Middleware` protocol, `Clock`, `errors.py`, in-memory `StateStore`, and the shared StateStore
-contract suite. Milestone 2 done (on branch `feat/client-core`, not committed): config models,
-`AsyncClient` and `Client`, httpx transport with timeouts, proxy and TLS, and `${ENV_VAR}`
-secret handling. Next, in order:
-3. Auth → retries (with response classifier) → pagination → rate limits (memory)
+contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient` and `Client`, httpx transport
+with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done (on branch
+`feat/auth-retry-pagination-ratelimit`, not committed): auth (api key, bearer, basic, OAuth2
+with single-flight refresh, custom), retries with the response classifier and Retry-After,
+pagination (five strategies and iterators), and in-memory rate limits (token bucket and quota
+windows over the StateStore). Still open from milestone 3: logging hooks (milestone 4), per-
+endpoint limiter keys and YAML pagination (both wait for endpoints.py). Next, in order:
 4. SQLite/Redis stores → hooks/logging/OTel → CLI/Docker/dlt adapter → docs
 
 Update this section as milestones land.

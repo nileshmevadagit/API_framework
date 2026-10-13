@@ -4,30 +4,45 @@ One client talks to one API. Each client owns its connection pool, so two client
 one process never share state. Call ``aclose()`` / ``close()`` when you are done, or
 use the client as a context manager.
 
-Responses are returned as received. Status classification and retries arrive with the
-retry middleware in milestone 3.
+The chain is fixed: caller middleware (outermost), retry, auth, rate limits, transport.
+Retries therefore get a fresh credential and are counted against quota. Non-2xx responses
+are raised as ``HTTPStatusError`` after retries are exhausted or ruled out.
 """
 
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import TYPE_CHECKING, TypeVar
 
+from apiframework.auth import build_auth
+from apiframework.clock import SystemClock
+from apiframework.middleware.auth import AuthMiddleware
 from apiframework.middleware.chain import build_chain
+from apiframework.middleware.ratelimit import RateLimitMiddleware
+from apiframework.middleware.retry import RetryMiddleware
+from apiframework.pagination import iter_items, iter_pages
+from apiframework.ratelimit import RateLimiters
 from apiframework.request import RequestSpec
+from apiframework.state import MemoryStateStore
 from apiframework.transport import HTTPTransport
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Mapping, Sequence
+    from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
     from types import TracebackType
 
     import httpx
     from pydantic import JsonValue
     from typing_extensions import Self
 
+    from apiframework.auth.base import AuthHandler
+    from apiframework.clock import Clock
     from apiframework.config import ResolvedApi
     from apiframework.middleware.base import Middleware
+    from apiframework.middleware.classify import Classifier
+    from apiframework.pagination.base import PaginationStrategy
     from apiframework.request import HTTPMethod
+    from apiframework.state import StateStore
 
 ParamValue = str | int | float | bool
 T = TypeVar("T")
@@ -43,15 +58,77 @@ def _param_text(value: ParamValue) -> str:
 class AsyncClient:
     """Async client for one API. Use ``await client.get(...)`` and friends."""
 
-    def __init__(self, api: ResolvedApi, *, middleware: Sequence[Middleware] = ()) -> None:
+    def __init__(
+        self,
+        api: ResolvedApi,
+        *,
+        middleware: Sequence[Middleware] = (),
+        auth: AuthHandler | None = None,
+        classifier: Classifier | None = None,
+        state: StateStore | None = None,
+        rate_limiters: RateLimiters | None = None,
+        clock: Clock | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
+        """Build the client for ``api``.
+
+        ``auth`` overrides the auth in the config (for custom handlers). ``state`` and
+        ``rate_limiters`` default to private ones; pass shared instances to share quota.
+        ``clock`` and ``rng`` are for tests.
+        """
         self.name = api.name
         self._base_url = api.base_url.rstrip("/")
+        clock = clock if clock is not None else SystemClock()
+        state = state if state is not None else MemoryStateStore(clock)
+        rng = rng if rng is not None else random.Random()
         self._transport = HTTPTransport(api)
-        self._chain = build_chain(middleware, self._transport.send)
+
+        handler = auth if auth is not None else build_auth(api.auth, clock=clock, state=state)
+        limiters = (
+            rate_limiters if rate_limiters is not None else RateLimiters(state=state, clock=clock)
+        )
+        layers: list[Middleware] = [
+            *middleware,
+            RetryMiddleware(api.retry, clock=clock, rng=rng, classifier=classifier),
+        ]
+        if handler is not None:
+            layers.append(AuthMiddleware(handler))
+        limits = limiters.for_key(api.name, api.rate_limits)
+        if limits:
+            layers.append(RateLimitMiddleware(limits))
+        self._chain = build_chain(layers, self._transport.send)
 
     async def send(self, spec: RequestSpec) -> httpx.Response:
         """Send a prepared request through the middleware chain."""
         return await self._chain(spec)
+
+    def build_request(
+        self,
+        method: HTTPMethod,
+        path: str,
+        *,
+        params: Mapping[str, ParamValue] | None = None,
+        headers: Mapping[str, str] | None = None,
+        json: JsonValue = None,
+        content: bytes | None = None,
+        cost: int = 1,
+    ) -> RequestSpec:
+        """Build a request for ``path`` (relative to the API's base URL) without sending it.
+
+        Pass ``json`` or ``content``, not both. ``cost`` is how many quota units it uses.
+        """
+        if json is not None and content is not None:
+            raise ValueError("pass json or content, not both")
+        return RequestSpec(
+            method=method,
+            url=self._url(path),
+            url_template=path,
+            params=tuple((key, _param_text(value)) for key, value in (params or {}).items()),
+            headers=tuple((key, value) for key, value in (headers or {}).items()),
+            json_body=json,
+            content=content,
+            cost=cost,
+        )
 
     async def request(
         self,
@@ -62,23 +139,39 @@ class AsyncClient:
         headers: Mapping[str, str] | None = None,
         json: JsonValue = None,
         content: bytes | None = None,
+        cost: int = 1,
     ) -> httpx.Response:
-        """Build a request for ``path`` (relative to the API's base URL) and send it.
-
-        Pass ``json`` or ``content``, not both.
-        """
-        if json is not None and content is not None:
-            raise ValueError("pass json or content, not both")
-        spec = RequestSpec(
-            method=method,
-            url=self._url(path),
-            url_template=path,
-            params=tuple((key, _param_text(value)) for key, value in (params or {}).items()),
-            headers=tuple((key, value) for key, value in (headers or {}).items()),
-            json_body=json,
+        """Build a request for ``path`` and send it through the chain."""
+        spec = self.build_request(
+            method,
+            path,
+            params=params,
+            headers=headers,
+            json=json,
             content=content,
+            cost=cost,
         )
         return await self.send(spec)
+
+    def iter_pages(
+        self,
+        spec: RequestSpec,
+        strategy: PaginationStrategy,
+        *,
+        max_pages: int | None = None,
+    ) -> AsyncIterator[httpx.Response]:
+        """Yield each page for ``spec``, following ``strategy`` until the last page."""
+        return iter_pages(self.send, spec, strategy, max_pages=max_pages)
+
+    def iter_items(
+        self,
+        spec: RequestSpec,
+        strategy: PaginationStrategy,
+        *,
+        max_pages: int | None = None,
+    ) -> AsyncIterator[JsonValue]:
+        """Yield every record across pages, one at a time."""
+        return iter_items(self.send, spec, strategy, max_pages=max_pages)
 
     async def get(
         self,
@@ -165,11 +258,34 @@ class AsyncClient:
 
 
 class Client:
-    """Blocking client for one API. Must not be used from inside a running event loop."""
+    """Blocking client for one API. Must not be used from inside a running event loop.
 
-    def __init__(self, api: ResolvedApi, *, middleware: Sequence[Middleware] = ()) -> None:
+    Takes the same options as ``AsyncClient``.
+    """
+
+    def __init__(
+        self,
+        api: ResolvedApi,
+        *,
+        middleware: Sequence[Middleware] = (),
+        auth: AuthHandler | None = None,
+        classifier: Classifier | None = None,
+        state: StateStore | None = None,
+        rate_limiters: RateLimiters | None = None,
+        clock: Clock | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
         self._loop = asyncio.new_event_loop()
-        self._inner = AsyncClient(api, middleware=middleware)
+        self._inner = AsyncClient(
+            api,
+            middleware=middleware,
+            auth=auth,
+            classifier=classifier,
+            state=state,
+            rate_limiters=rate_limiters,
+            clock=clock,
+            rng=rng,
+        )
 
     @property
     def name(self) -> str:

@@ -47,3 +47,19 @@ class AuthError(ApiError):
 
 class ConfigError(ApiError):
     """Configuration is invalid or refers to something that does not exist."""
+
+
+class ResponseRejected(ApiError):
+    """The response classifier rejected a response whose status was not an HTTP error.
+
+    Used for APIs that return 200 with an error in the body (GraphQL, JSON-RPC).
+    """
+
+    def __init__(self, response: httpx.Response, reason: str) -> None:
+        self.response = response
+        self.reason = reason
+        super().__init__(f"response rejected: {reason}")
+
+
+class PaginationError(ApiError):
+    """Pagination cannot continue safely, for example because the next URL repeats."""
