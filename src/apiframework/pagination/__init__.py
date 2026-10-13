@@ -5,6 +5,7 @@ from __future__ import annotations
 from apiframework.pagination.base import PaginationStrategy, iter_items, iter_pages
 from apiframework.pagination.strategies import (
     CursorPagination,
+    HasMorePagination,
     LinkHeaderPagination,
     NextUrlPagination,
     OffsetPagination,
@@ -13,6 +14,7 @@ from apiframework.pagination.strategies import (
 
 __all__ = [
     "CursorPagination",
+    "HasMorePagination",
     "LinkHeaderPagination",
     "NextUrlPagination",
     "OffsetPagination",

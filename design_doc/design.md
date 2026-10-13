@@ -82,7 +82,8 @@ Idempotency-Key, because a blind retry can create duplicate records.
 
 **Pagination.** A strategy has two jobs: build the next request from the last
 response, and pull the items out of a response. I'll ship offset/limit, page
-number, cursor (located by JSON path), RFC 8288 Link headers and "next URL in
+number, cursor (located by JSON path), a `has_more` flag with the last record's
+id as the cursor (Stripe's style), RFC 8288 Link headers and "next URL in
 the body". Between them they cover the large majority of public APIs.
 Strategies can change any part of the next request, including the body, which
 is what GraphQL cursors need. Results come back as lazy `iter_pages()` /

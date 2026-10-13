@@ -46,7 +46,7 @@ src/apiframework/
   logging_json.py  # JsonFormatter, attached by the application (library never configures logging)
   auth/            # base.py: AuthHandler; simple.py: api key, bearer, basic; oauth2; custom
   pagination/      # base.py: protocol + iter_pages/iter_items; strategies.py: offset, page,
-                   # cursor, link header, next URL
+                   # cursor, has_more, link header, next URL
   codecs/          # json, form, xml, raw
   state/           # base.py: StateStore protocol; memory.py, sqlite.py, redis.py (Lua incr);
                    # build_state_store() turns the config `state:` section into a store
