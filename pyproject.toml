@@ -49,6 +49,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4.0",
     "types-pyyaml>=6.0.12.20260906",
+    "redis>=5.0",
 ]
 
 [tool.hatch.build.targets.wheel]

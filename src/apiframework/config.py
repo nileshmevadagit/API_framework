@@ -214,9 +214,37 @@ class ApiConfig(_Model):
         return checked
 
 
+class MemoryState(_Model):
+    """Lost on exit. The default."""
+
+    type: Literal["memory"] = "memory"
+
+
+class SQLiteState(_Model):
+    """One machine, durable across restarts."""
+
+    type: Literal["sqlite"]
+    path: str = Field(min_length=1)
+
+
+class RedisState(_Model):
+    """Shared by several workers. ``url`` is a secret, so it must be a ``${ENV_VAR}``."""
+
+    type: Literal["redis"]
+    url: Secret
+    prefix: str = "apiframework:"
+
+
+StateConfig = Annotated[
+    MemoryState | SQLiteState | RedisState,
+    Field(discriminator="type"),
+]
+
+
 class Config(_Model):
     defaults: Defaults = Field(default_factory=Defaults)
     apis: dict[str, ApiConfig] = Field(default_factory=dict)
+    state: StateConfig = Field(default_factory=MemoryState)
 
     def api(self, name: str) -> ResolvedApi:
         """Return API ``name`` with defaults filled in. Raises ``ConfigError`` if unknown."""
