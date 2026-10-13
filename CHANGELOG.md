@@ -7,6 +7,9 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Integration tests against JSONPlaceholder covering every HTTP verb, nested
+  routes and the non-persisted write behaviour (`tests/integration/`, marker
+  `integration`; base URL overridable with `JSONPLACEHOLDER_URL`).
 - Project scaffold: packaging (uv + hatchling), ruff, mypy --strict, pytest,
   pre-commit, GitHub Actions (CI + nightly integration), docker-compose services,
   VS Code workspace settings, CLAUDE.md.
