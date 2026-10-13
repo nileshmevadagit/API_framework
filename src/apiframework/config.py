@@ -50,6 +50,18 @@ def _env(info: ValidationInfo) -> Mapping[str, str]:
     return os.environ
 
 
+def _checked_headers(value: dict[str, str], info: ValidationInfo) -> dict[str, str]:
+    """Refuse literal credentials in headers and expand ``${VAR}`` references."""
+    env = _env(info)
+    checked: dict[str, str] = {}
+    for name, raw in value.items():
+        where = f"headers.{name}"
+        reject_literal_name_value(name, raw, where=where)
+        reject_literal_secret(raw, where=where)
+        checked[name] = expand_refs(raw, env, where=where)
+    return checked
+
+
 def _secret(value: object, info: ValidationInfo) -> SecretStr:
     """Secret fields must be ``${ENV_VAR}`` references. Anything else is refused."""
     if not isinstance(value, str) or not REF_PATTERN.search(value):
@@ -191,6 +203,7 @@ class ApiConfig(_Model):
     proxy: ProxyConfig | None = None
     tls: TLSConfig | None = None
     retry: RetryConfig | None = None
+    endpoints: dict[str, EndpointConfig] = Field(default_factory=dict)
 
     @field_validator("base_url")
     @classmethod
@@ -204,14 +217,77 @@ class ApiConfig(_Model):
     @field_validator("headers")
     @classmethod
     def _check_headers(cls, value: dict[str, str], info: ValidationInfo) -> dict[str, str]:
-        env = _env(info)
-        checked: dict[str, str] = {}
-        for name, raw in value.items():
-            where = f"headers.{name}"
-            reject_literal_name_value(name, raw, where=where)
-            reject_literal_secret(raw, where=where)
-            checked[name] = expand_refs(raw, env, where=where)
-        return checked
+        return _checked_headers(value, info)
+
+
+class OffsetPaging(_Model):
+    type: Literal["offset"]
+    limit: int = Field(gt=0)
+    limit_param: str = "limit"
+    offset_param: str = "offset"
+    items_path: str = ""
+
+
+class PagePaging(_Model):
+    type: Literal["page"]
+    page_param: str = "page"
+    start: int = 1
+    items_path: str = ""
+
+
+class CursorPaging(_Model):
+    type: Literal["cursor"]
+    cursor_path: str = Field(min_length=1)
+    cursor_param: str = "cursor"
+    items_path: str = ""
+
+
+class LinkHeaderPaging(_Model):
+    type: Literal["link_header"]
+    rel: str = "next"
+
+
+class NextUrlPaging(_Model):
+    type: Literal["next_url"]
+    url_path: str = Field(min_length=1)
+    items_path: str = ""
+
+
+PagingConfig = Annotated[
+    OffsetPaging | PagePaging | CursorPaging | LinkHeaderPaging | NextUrlPaging,
+    Field(discriminator="type"),
+]
+
+
+class EndpointConfig(_Model):
+    """One request an API exposes. ``path`` is relative to the API's base URL."""
+
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
+    path: str = Field(min_length=1)
+    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    headers: dict[str, str] = Field(default_factory=dict)
+    pagination: PagingConfig | None = None
+    cost: int = Field(default=1, ge=1)
+
+    @field_validator("headers")
+    @classmethod
+    def _check_headers(cls, value: dict[str, str], info: ValidationInfo) -> dict[str, str]:
+        return _checked_headers(value, info)
+
+
+class ObservabilityConfig(_Model):
+    log_bodies: bool = False
+    telemetry: bool = False
+
+
+class JobConfig(_Model):
+    """One unit of work for ``apiframework run``: an endpoint of an API, run to the end."""
+
+    api: str
+    endpoint: str
+    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    max_pages: int | None = Field(default=None, ge=1)
+    output: str | None = None  # file path; None writes to stdout
 
 
 class MemoryState(_Model):
@@ -245,6 +321,18 @@ class Config(_Model):
     defaults: Defaults = Field(default_factory=Defaults)
     apis: dict[str, ApiConfig] = Field(default_factory=dict)
     state: StateConfig = Field(default_factory=MemoryState)
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    jobs: dict[str, JobConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_jobs(self) -> Config:
+        for name, job in self.jobs.items():
+            api = self.apis.get(job.api)
+            if api is None:
+                raise ConfigError(f"jobs.{name}: no API named {job.api!r}")
+            if job.endpoint not in api.endpoints:
+                raise ConfigError(f"jobs.{name}: API {job.api!r} has no endpoint {job.endpoint!r}")
+        return self
 
     def api(self, name: str) -> ResolvedApi:
         """Return API ``name`` with defaults filled in. Raises ``ConfigError`` if unknown."""
@@ -261,6 +349,7 @@ class Config(_Model):
             proxy=raw.proxy or self.defaults.proxy,
             tls=raw.tls or self.defaults.tls,
             retry=raw.retry or self.defaults.retry,
+            endpoints=raw.endpoints,
         )
 
 
@@ -276,6 +365,7 @@ class ResolvedApi(_Model):
     proxy: ProxyConfig
     tls: TLSConfig
     retry: RetryConfig
+    endpoints: dict[str, EndpointConfig]
 
 
 def parse_config(data: Mapping[str, Any], *, env: Mapping[str, str] | None = None) -> Config:

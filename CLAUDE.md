@@ -159,14 +159,15 @@ contract suite. Milestone 2 done (merged to `main`): config models, `AsyncClient
 httpx transport with timeouts, proxy and TLS, and `${ENV_VAR}` secret handling. Milestone 3 done
 (merged to `main`): auth, retries with the response classifier and Retry-After, pagination
 strategies and iterators, and in-memory rate limits. Milestone 6 done (merged to `main`): SQLite
-and Redis state stores and the `state:` config section. Milestone 7 done (on branch
-`feat/hooks-logging-otel`, not committed): access log (outermost, template-only URLs, redacted
-headers, bodies only at DEBUG when enabled), hooks for request, response, retry and rate-limit
-events, a JSON log formatter for the application to attach, and an optional OpenTelemetry span.
+and Redis state stores and the `state:` config section. Milestone 7 done (merged to `main`):
+access log, hooks, JSON log formatter and an optional OpenTelemetry span. Milestone 8 done (on
+branch `feat/cli-endpoints-docker-dlt`, not committed): `endpoints.py` (endpoint and paging config
+into strategies and requests), the `apiframework run job.yaml` CLI (JSON lines out, exit codes
+0/1/2), `python -m apiframework`, the dlt adapter, a Dockerfile (non-root, runtime extras only),
+and `observability:` and `jobs:` config sections.
 
-Still open for v1: CLI, Docker and dlt adapter (milestone 8), docs and examples (milestone 9),
-per-endpoint limiter keys and YAML pagination (both wait for `endpoints.py`), and `codecs/` (not
-yet scheduled). Observability options are constructor arguments only; wiring them to YAML belongs
-with the CLI in milestone 8.
+Still open for v1: docs and examples (milestone 9), the remaining-quota log field (see
+CHANGELOG), and `codecs/` for non-JSON bodies (not yet scheduled). Next, in order:
+9. Docs and examples
 
 Update this section as milestones land.

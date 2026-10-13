@@ -27,6 +27,15 @@ All notable changes are recorded here. The format follows
   `Hooks` for request, response, retry and rate-limit events, `JsonFormatter` for applications to
   attach, and an optional OpenTelemetry span (`telemetry=True`, `otel` extra). Headers are redacted
   before any log; bodies are logged only at DEBUG with `log_bodies=True`.
+- Endpoints: `apis.<name>.endpoints` config (method, path, params, headers, pagination, cost),
+  with paging types offset, page, cursor, link_header and next_url (`endpoints.py`).
+- CLI: `apiframework run job.yaml [--job NAME] [-v]` writes records as JSON lines to stdout or
+  each job's `output` file. Exit codes: 0 success, 1 job failed, 2 bad job file or environment.
+  Also `python -m apiframework`.
+- `jobs:` and `observability:` config sections. Each job names an API endpoint and its params.
+- dlt adapter (`apiframework.adapters.dlt.records_resource`, `dlt` extra).
+- Dockerfile for the CLI: python:3.12-slim, non-root user, runtime extras only.
+- `Client.iter_items` and `Client.build_request` for the sync client.
 - `url_template` argument on `request()` and `build_request()`, so logs and spans show `/users/{id}`
   rather than the ID.
 - Auth: api key (header or query), bearer, basic, OAuth2 client credentials (cached, refreshed
