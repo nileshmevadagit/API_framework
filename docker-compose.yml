@@ -1,0 +1,37 @@
+# Local services for integration tests.  Start:  docker compose up -d
+# All images are multi-arch, so they run natively on Apple Silicon.
+services:
+  httpbin:
+    # Go port of httpbin; the original kennethreitz/httpbin image is amd64-only.
+    image: ghcr.io/mccutchen/go-httpbin:latest
+    ports: ["8080:8080"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  mitmproxy:
+    # Forward proxy for proxy/TLS tests. Web UI at http://localhost:8081
+    image: mitmproxy/mitmproxy:latest
+    command: mitmweb --web-host 0.0.0.0 --listen-port 8888
+    ports: ["8888:8888", "8081:8081"]
+
+  # --- Stage 1 extras for the later AWS-shaped work. Start with:
+  #     docker compose --profile aws up -d
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    profiles: ["aws"]
+
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    ports: ["8000:8000"]
+    profiles: ["aws"]

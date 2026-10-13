@@ -1,0 +1,28 @@
+name: Nightly integration
+
+on:
+  schedule:
+    - cron: "17 10 * * *"   # 03:17 Pacific (daylight time)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Start local services
+        run: docker compose up -d --wait httpbin redis
+      - name: Integration tests
+        run: uv run pytest -m integration -v
+        env:
+          # Optional repo secret; raises GitHub's rate limit for the GitHub API tests.
+          GITHUB_TOKEN: ${{ secrets.INTEGRATION_GITHUB_TOKEN }}
+      - if: always()
+        run: docker compose down
