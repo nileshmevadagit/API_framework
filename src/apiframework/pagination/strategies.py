@@ -1,4 +1,4 @@
-"""The five built-in strategies: offset, page number, cursor, Link header and next URL.
+"""The six built-in strategies: offset, page number, cursor, has_more, Link header and next URL.
 
 Each one stops on an empty page or a missing next pointer. Offset and page strategies
 stop on an empty page rather than a short one, because servers may cap page sizes.
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from apiframework.errors import PaginationError
 from apiframework.pagination.base import (
     json_path,
     page_items,
@@ -92,6 +93,39 @@ class CursorPagination:
         cursor = json_path(_body(response), self._cursor_path)
         if cursor is None or cursor == "" or cursor is False:
             return None
+        return with_params(current, **{self._cursor_param: str(cursor)})
+
+    def items(self, response: httpx.Response) -> list[JsonValue]:
+        return page_items(response, self._items_path)
+
+
+class HasMorePagination:
+    """A ``has_more`` flag in the body, as Stripe and similar APIs send. The next cursor is the
+    ``cursor_field`` of the last record on the page, sent back as ``cursor_param``."""
+
+    def __init__(
+        self,
+        *,
+        more_path: str = "has_more",
+        cursor_field: str = "id",
+        cursor_param: str = "starting_after",
+        items_path: str = "",
+    ) -> None:
+        self._more_path = more_path
+        self._cursor_field = cursor_field
+        self._cursor_param = cursor_param
+        self._items_path = items_path
+
+    def next_request(self, current: RequestSpec, response: httpx.Response) -> RequestSpec | None:
+        items = self.items(response)
+        if not items or json_path(_body(response), self._more_path) is not True:
+            return None
+        last = items[-1]
+        if not isinstance(last, dict):
+            raise PaginationError("has_more pages need object records to read the cursor from")
+        cursor = last.get(self._cursor_field)
+        if cursor is None or cursor == "":
+            raise PaginationError(f"last record has no {self._cursor_field!r} to continue from")
         return with_params(current, **{self._cursor_param: str(cursor)})
 
     def items(self, response: httpx.Response) -> list[JsonValue]:

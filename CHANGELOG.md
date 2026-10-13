@@ -29,6 +29,8 @@ All notable changes are recorded here. The format follows
   before any log; bodies are logged only at DEBUG with `log_bodies=True`.
 - Endpoints: `apis.<name>.endpoints` config (method, path, params, headers, pagination, cost),
   with paging types offset, page, cursor, link_header and next_url (`endpoints.py`).
+- Pagination type `has_more` (`HasMorePagination`): a `has_more` flag in the body, with the
+  last record's `id` sent as `starting_after`. Used by Stripe-style list endpoints.
 - CLI: `apiframework run job.yaml [--job NAME] [-v]` writes records as JSON lines to stdout or
   each job's `output` file. Exit codes: 0 success, 1 job failed, 2 bad job file or environment.
   Also `python -m apiframework`.

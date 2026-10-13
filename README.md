@@ -234,11 +234,14 @@ a connection fails or a read times out. Other 4xx responses fail immediately.
 | `offset` | `limit`, `limit_param`, `offset_param`, `items_path` | a page is empty |
 | `page` | `page_param`, `start`, `items_path` | a page is empty |
 | `cursor` | `cursor_path`, `cursor_param`, `items_path` | the cursor is missing or empty |
+| `has_more` | `more_path` (default `has_more`), `cursor_field` (default `id`), `cursor_param` (default `starting_after`), `items_path` | the flag is not `true`, or the page is empty |
 | `link_header` | `rel` (default `next`) | there is no `rel="next"` link |
 | `next_url` | `url_path`, `items_path` | the URL is missing or null |
 
 `items_path` is a dotted path into the body, such as `data` or `results`. Leave it
 empty when the body is the list. Relative next URLs are resolved against the request.
+For `has_more`, the next cursor is `cursor_field` of the last record on the page.
+If that record is not an object or lacks the field, `PaginationError` is raised.
 If the server points back at a page already fetched, `PaginationError` is raised
 instead of looping.
 

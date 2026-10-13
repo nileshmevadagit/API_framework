@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from apiframework.config import (
     CursorPaging,
+    HasMorePaging,
     LinkHeaderPaging,
     NextUrlPaging,
     OffsetPaging,
@@ -16,6 +17,7 @@ from apiframework.config import (
 )
 from apiframework.pagination import (
     CursorPagination,
+    HasMorePagination,
     LinkHeaderPagination,
     NextUrlPagination,
     OffsetPagination,
@@ -62,6 +64,13 @@ def build_strategy(paging: PagingConfig) -> PaginationStrategy:
     if isinstance(paging, CursorPaging):
         return CursorPagination(
             cursor_path=paging.cursor_path,
+            cursor_param=paging.cursor_param,
+            items_path=paging.items_path,
+        )
+    if isinstance(paging, HasMorePaging):
+        return HasMorePagination(
+            more_path=paging.more_path,
+            cursor_field=paging.cursor_field,
             cursor_param=paging.cursor_param,
             items_path=paging.items_path,
         )

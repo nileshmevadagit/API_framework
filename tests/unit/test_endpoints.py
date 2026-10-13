@@ -12,6 +12,7 @@ from apiframework.endpoints import build_request, build_strategy
 from apiframework.errors import ConfigError
 from apiframework.pagination import (
     CursorPagination,
+    HasMorePagination,
     LinkHeaderPagination,
     NextUrlPagination,
     OffsetPagination,
@@ -42,6 +43,7 @@ def test_each_paging_type_maps_to_its_strategy() -> None:
                 "pagination": {"type": "cursor", "cursor_path": "meta.next"},
             },
             "d": {"method": "GET", "path": "/d", "pagination": {"type": "link_header"}},
+            "f": {"method": "GET", "path": "/f", "pagination": {"type": "has_more"}},
             "e": {
                 "method": "GET",
                 "path": "/e",
@@ -58,6 +60,7 @@ def test_each_paging_type_maps_to_its_strategy() -> None:
         "b": PagePagination,
         "c": CursorPagination,
         "d": LinkHeaderPagination,
+        "f": HasMorePagination,
         "e": NextUrlPagination,
     }
 

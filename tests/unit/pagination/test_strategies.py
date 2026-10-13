@@ -10,6 +10,7 @@ import pytest
 from apiframework.errors import PaginationError
 from apiframework.pagination import (
     CursorPagination,
+    HasMorePagination,
     LinkHeaderPagination,
     NextUrlPagination,
     OffsetPagination,
@@ -136,6 +137,60 @@ class TestNextUrl:
     def test_stops_when_next_is_null(self) -> None:
         strategy = NextUrlPagination(url_path="links.next", items_path="data")
         assert strategy.next_request(_req(), _json({"data": [1], "links": {"next": None}})) is None
+
+
+class TestHasMore:
+    def test_continues_from_the_last_record_id(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        page = _json({"data": [{"id": "ch_1"}, {"id": "ch_2"}], "has_more": True})
+        nxt = strategy.next_request(_req(), page)
+        assert nxt is not None
+        assert dict(nxt.params) == {"starting_after": "ch_2"}
+
+    def test_replaces_the_cursor_from_the_previous_page(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        page = _json({"data": [{"id": "ch_9"}], "has_more": True})
+        nxt = strategy.next_request(_req(params={"starting_after": "ch_1"}), page)
+        assert nxt is not None
+        assert dict(nxt.params) == {"starting_after": "ch_9"}
+
+    def test_stops_when_has_more_is_false(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        page = _json({"data": [{"id": "ch_1"}], "has_more": False})
+        assert strategy.next_request(_req(), page) is None
+
+    @pytest.mark.parametrize(
+        "body", [{"data": [{"id": "ch_1"}]}, {"data": [{"id": "x"}], "has_more": "yes"}]
+    )
+    def test_only_a_true_flag_continues(self, body: Any) -> None:
+        strategy = HasMorePagination(items_path="data")
+        assert strategy.next_request(_req(), _json(body)) is None
+
+    def test_stops_on_empty_page_even_if_flag_is_true(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        assert strategy.next_request(_req(), _json({"data": [], "has_more": True})) is None
+
+    def test_custom_field_names_are_used(self) -> None:
+        strategy = HasMorePagination(
+            more_path="page.more",
+            cursor_field="key",
+            cursor_param="after",
+            items_path="rows",
+        )
+        page = _json({"rows": [{"key": "k7"}], "page": {"more": True}})
+        nxt = strategy.next_request(_req(), page)
+        assert nxt is not None
+        assert dict(nxt.params) == {"after": "k7"}
+
+    def test_missing_cursor_field_is_a_pagination_error(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        with pytest.raises(PaginationError, match="'id'"):
+            strategy.next_request(_req(), _json({"data": [{"name": "x"}], "has_more": True}))
+
+    def test_non_object_records_are_a_pagination_error(self) -> None:
+        strategy = HasMorePagination(items_path="data")
+        with pytest.raises(PaginationError, match="object records"):
+            strategy.next_request(_req(), _json({"data": [1, 2], "has_more": True}))
 
 
 def test_non_list_items_are_a_pagination_error() -> None:

@@ -248,6 +248,16 @@ class CursorPaging(_Model):
     items_path: str = ""
 
 
+class HasMorePaging(_Model):
+    """Stripe-style: a ``has_more`` flag in the body; the next cursor is the last record's id."""
+
+    type: Literal["has_more"]
+    more_path: str = Field(default="has_more", min_length=1)
+    cursor_field: str = Field(default="id", min_length=1)
+    cursor_param: str = Field(default="starting_after", min_length=1)
+    items_path: str = ""
+
+
 class LinkHeaderPaging(_Model):
     type: Literal["link_header"]
     rel: str = "next"
@@ -260,7 +270,7 @@ class NextUrlPaging(_Model):
 
 
 PagingConfig = Annotated[
-    OffsetPaging | PagePaging | CursorPaging | LinkHeaderPaging | NextUrlPaging,
+    OffsetPaging | PagePaging | CursorPaging | HasMorePaging | LinkHeaderPaging | NextUrlPaging,
     Field(discriminator="type"),
 ]
 
