@@ -32,12 +32,14 @@ Never call `pip` or `python` directly; use `uv run` / `uv add`.
 src/apiframework/
   client.py        # AsyncClient (core) + Client (thin sync wrapper)
   config.py        # Pydantic models; YAML + Python both load into these
+  secrets.py       # `${ENV_VAR}` refs; rejects pasted keys in config
+  transport.py     # httpx transport: timeouts, proxy, TLS (bottom of the chain)
   endpoints.py     # endpoint definitions -> RequestSpec
   request.py       # RequestSpec (frozen; .clone(**overrides))
   errors.py        # ApiError hierarchy
   clock.py         # Clock protocol + SystemClock (now / monotonic / sleep)
   cli.py           # `apiframework run job.yaml`
-  middleware/      # base.py: Middleware protocol; logging, retry, auth, ratelimit
+  middleware/      # base.py: Middleware protocol; chain.py: compose; logging, retry, auth, ratelimit
   auth/            # api_key, bearer, basic, oauth2, custom
   pagination/      # offset, page, cursor, link_header, next_url
   codecs/          # json, form, xml, raw
@@ -145,10 +147,11 @@ drifts into these, stop and ask.
 
 ## Status
 
-Scaffold done (packaging, CI, tooling). Milestone 1 done (on branch `feat/core-types`,
-not committed): `RequestSpec`, `Middleware` protocol, `Clock`, `errors.py`,
-in-memory `StateStore`, and the shared StateStore contract suite. Next, in order:
-2. Config models + client + transport (proxy, TLS)
+Scaffold done (packaging, CI, tooling). Milestone 1 done (merged to `main`): `RequestSpec`,
+`Middleware` protocol, `Clock`, `errors.py`, in-memory `StateStore`, and the shared StateStore
+contract suite. Milestone 2 done (on branch `feat/client-core`, not committed): config models,
+`AsyncClient` and `Client`, httpx transport with timeouts, proxy and TLS, and `${ENV_VAR}`
+secret handling. Next, in order:
 3. Auth → retries (with response classifier) → pagination → rate limits (memory)
 4. SQLite/Redis stores → hooks/logging/OTel → CLI/Docker/dlt adapter → docs
 
