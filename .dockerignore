@@ -1,0 +1,16 @@
+.git
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+__pycache__
+**/__pycache__
+tests
+design_doc
+examples
+.claude
+.vscode
+.env
+*.db
+*.jsonl

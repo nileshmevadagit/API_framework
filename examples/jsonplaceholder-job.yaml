@@ -1,0 +1,19 @@
+# Example job file for `apiframework run`. Run it with:
+#   uv run apiframework run examples/jsonplaceholder-job.yaml
+# or, with the Docker image:
+#   docker run --rm -v "$PWD/examples:/job:ro" apiframework:dev run /job/jsonplaceholder-job.yaml
+apis:
+  jsonplaceholder:
+    base_url: https://jsonplaceholder.typicode.com
+    endpoints:
+      posts:
+        method: GET
+        path: /posts
+        params: {_limit: 10, _page: 1}
+        pagination: {type: page, page_param: _page}
+
+jobs:
+  all_posts:
+    api: jsonplaceholder
+    endpoint: posts
+    output: posts.jsonl   # relative to where you run the command; omit to print to stdout

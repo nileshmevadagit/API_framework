@@ -30,7 +30,7 @@ from apiframework.state import MemoryStateStore
 from apiframework.transport import HTTPTransport
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
+    from collections.abc import AsyncIterator, Awaitable, Iterator, Mapping, Sequence
     from types import TracebackType
 
     import httpx
@@ -278,6 +278,20 @@ class AsyncClient:
         return f"{self._base_url}/{path.lstrip('/')}"
 
 
+class _Done:
+    """Marks the end of an async iterator when driven from sync code."""
+
+
+_DONE = _Done()
+
+
+async def _next_item(items: AsyncIterator[JsonValue]) -> JsonValue | _Done:
+    try:
+        return await items.__anext__()
+    except StopAsyncIteration:
+        return _DONE
+
+
 class Client:
     """Blocking client for one API. Must not be used from inside a running event loop.
 
@@ -399,6 +413,44 @@ class Client:
         headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
         return self._run(self._inner.head(path, params=params, headers=headers))
+
+    def build_request(
+        self,
+        method: HTTPMethod,
+        path: str,
+        *,
+        params: Mapping[str, ParamValue] | None = None,
+        headers: Mapping[str, str] | None = None,
+        json: JsonValue = None,
+        content: bytes | None = None,
+        cost: int = 1,
+        url_template: str | None = None,
+    ) -> RequestSpec:
+        return self._inner.build_request(
+            method,
+            path,
+            params=params,
+            headers=headers,
+            json=json,
+            content=content,
+            cost=cost,
+            url_template=url_template,
+        )
+
+    def iter_items(
+        self,
+        spec: RequestSpec,
+        strategy: PaginationStrategy,
+        *,
+        max_pages: int | None = None,
+    ) -> Iterator[JsonValue]:
+        """Yield records one at a time, blocking between pages. Consume it in the calling thread."""
+        items = self._inner.iter_items(spec, strategy, max_pages=max_pages)
+        while True:
+            item = self._run(_next_item(items))
+            if isinstance(item, _Done):
+                return
+            yield item
 
     def close(self) -> None:
         self._run(self._inner.aclose())

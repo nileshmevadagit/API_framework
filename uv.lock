@@ -65,6 +65,7 @@ yaml = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dlt" },
     { name = "mypy" },
     { name = "opentelemetry-api" },
     { name = "pre-commit", version = "4.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -72,6 +73,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "pyyaml" },
     { name = "redis" },
     { name = "respx" },
     { name = "ruff" },
@@ -93,12 +95,14 @@ provides-extras = ["yaml", "socks", "redis", "otel", "dlt", "aws"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dlt", specifier = ">=1.0" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "opentelemetry-api", specifier = ">=1.25" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "redis", specifier = ">=5.0" },
     { name = "respx", specifier = ">=0.21" },
     { name = "ruff", specifier = ">=0.8" },
