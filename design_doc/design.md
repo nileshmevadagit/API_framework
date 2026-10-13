@@ -183,13 +183,16 @@ API_framework/
 ├── .vscode/                      # settings.json, extensions.json, launch.json
 ├── design_doc/                   # this document (+ original .docx)
 ├── src/apiframework/
-│   ├── client.py  config.py  endpoints.py  errors.py  cli.py
-│   ├── middleware/               # logging, retry, auth, ratelimit
-│   ├── auth/                     # api_key, bearer, basic, oauth2, custom
-│   ├── pagination/               # offset, page, cursor, link_header, next_url
-│   ├── codecs/                   # json, form, xml, raw
-│   ├── state/                    # memory, sqlite, redis
-│   └── adapters/dlt.py           # optional extra
+│   ├── client.py  config.py  endpoints.py  errors.py  cli.py  __main__.py
+│   ├── clock.py  request.py  transport.py  secrets.py  hooks.py  ratelimit.py
+│   ├── logging_json.py           # JsonFormatter, attached by the application
+│   ├── middleware/               # access_log, telemetry, retry (+ classify, backoff),
+│   │                             # auth, ratelimit, chain (composition)
+│   ├── auth/                     # base, simple (api key, bearer, basic), oauth2, custom
+│   ├── pagination/               # base (protocol, iter_pages/iter_items), strategies
+│   ├── state/                    # base, memory, sqlite, redis
+│   ├── adapters/dlt.py           # optional extra
+│   └── codecs/                   # json, form, xml, raw (not built yet)
 ├── tests/unit/  tests/integration/  examples/
 ├── CLAUDE.md  README.md  CONTRIBUTING.md  CHANGELOG.md  LICENSE
 ├── pyproject.toml  uv.lock  .python-version
@@ -197,7 +200,7 @@ API_framework/
 └── .pre-commit-config.yaml  .editorconfig  .gitignore  .gitattributes
 ```
 
-A `Dockerfile` joins the root when the CLI runner milestone lands.
+The `Dockerfile` in the root builds the CLI image (milestone 8).
 
 ## Development environment and prerequisites
 
