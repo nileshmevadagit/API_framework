@@ -79,6 +79,19 @@ def test_paginated_job_writes_json_lines_to_its_output(
     assert records == [{"id": 1}, {"id": 2}, {"id": 3}]
 
 
+def test_output_in_missing_folders_creates_them(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    _mock_posts(respx_mock)
+    output = tmp_path / "out" / "nested" / "posts.jsonl"
+    job = _job_file(tmp_path, output)
+
+    code = main(["run", str(job), "--job", "all_posts"])
+
+    assert code == EXIT_OK
+    assert output.exists()
+
+
 def test_unpaginated_job_writes_the_body_to_stdout(
     tmp_path: Path, respx_mock: respx.MockRouter, capsys: pytest.CaptureFixture[str]
 ) -> None:
