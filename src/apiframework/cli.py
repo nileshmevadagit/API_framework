@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from apiframework.client import AsyncClient
@@ -117,6 +118,8 @@ async def _run(job_file: str, selected: list[str] | None) -> int:
 
 
 def _open_output(path: str) -> TextIO:
+    # Create missing folders, so `out/customers.jsonl` works on a fresh checkout.
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     return open(path, "w", encoding="utf-8")  # closed by the caller's with-block
 
 
